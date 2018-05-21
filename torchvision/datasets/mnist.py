@@ -215,6 +215,10 @@ class EMNIST(MNIST):
             and returns a transformed version. E.g, ``transforms.RandomCrop``
         target_transform (callable, optional): A function/transform that takes in the
             target and transforms it.
+
+     Attributes:
+        classes (list): List of the class names.
+        class_to_idx (dict): Dict with items (class_name, class_index).
     """
     url = 'http://www.itl.nist.gov/iaui/vip/cs_links/EMNIST/gzip.zip'
     splits = ('byclass', 'bymerge', 'balanced', 'letters', 'digits', 'mnist')
@@ -228,6 +232,27 @@ class EMNIST(MNIST):
         self.training_file = self._training_file(split)
         self.test_file = self._test_file(split)
         super(EMNIST, self).__init__(root, **kwargs)
+
+        self.classes = []
+        self.class_to_idx = {}
+        mapping_filename = os.path.join(root, self.raw_folder, 'emnist-{}-mapping.txt'.format(split))
+        with open(mapping_filename) as mapping_file:
+            if split == 'letters':
+                # split='letters' targets range from 1 to 26 instead of 0 to 25.
+                self.classes.append(None)
+                for line in mapping_file.readlines():
+                    idx, uppercase_ordinal, lowercase_ordinal = [int(x) for x in line.split()]
+                    upper = chr(uppercase_ordinal)
+                    lower = chr(lowercase_ordinal)
+                    self.class_to_idx[upper] = idx
+                    self.class_to_idx[lower] = idx
+                    self.classes.append(upper)
+            else:
+                for line in mapping_file.readlines():
+                    idx, class_ordinal = [int(x) for x in line.split()]
+                    _class = chr(class_ordinal)
+                    self.classes.append(_class)
+                    self.class_to_idx[_class] = idx
 
     def _training_file(self, split):
         return 'training_{}.pt'.format(split)
@@ -274,6 +299,9 @@ class EMNIST(MNIST):
                 with open(os.path.join(raw_folder, gzip_file.replace('.gz', '')), 'wb') as out_f, \
                         gzip.GzipFile(os.path.join(gzip_folder, gzip_file)) as zip_f:
                     out_f.write(zip_f.read())
+            elif gzip_file.endswith('mapping.txt'):
+                src = os.path.join(gzip_folder, gzip_file)
+                shutil.copy(src, raw_folder)
         shutil.rmtree(gzip_folder)
 
         # process and save as torch files
